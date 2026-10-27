@@ -1,0 +1,223 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diwali Ticket System</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #171321;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    .card {
+      width: 100%;
+      max-width: 480px;
+      padding: 24px;
+      border-radius: 18px;
+      background: #282238;
+      box-shadow: 0 10px 35px #0005;
+    }
+    h1 { color: #ffcf70; }
+    input, button {
+      width: 100%;
+      padding: 13px;
+      margin: 8px 0;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+    input { border: 1px solid #aaa; }
+    button {
+      border: 0;
+      background: #ffcf70;
+      color: #20152b;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #reader { margin-top: 16px; }
+    #result {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 10px;
+      background: #393047;
+      overflow-wrap: anywhere;
+    }
+    .allowed { color: #8cffae; }
+    .denied { color: #ff9292; }
+    .info { color: #ffdc8e; }
+    .small { color: #c9c2d5; font-size: 13px; }
+    .ticket { font-size: 21px; font-weight: bold; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <main class="card" id="app">
+    <h1>🪔 Diwali Party</h1>
+    <p>Loading...</p>
+  </main>
+
+  <script>
+    const API_URL =
+      "https://script.google.com/macros/s/AKfycbzir-1Vc65MMHkuzPUNskFg39dBMOLYstz7EtNfrcmuR4GZFP9P36RgVxnUpnfIIPJO/exec";
+
+    const app = document.getElementById("app");
+    const params = new URLSearchParams(window.location.search);
+    const guestTicket = params.get("ticket");
+
+    // GUEST PAGE: open when a guest scans their ticket QR.
+    if (guestTicket) {
+      app.innerHTML = `
+        <h1>🎉 You're Invited! 🪔</h1>
+        <p>Welcome, Superstar!</p>
+        <p>Get ready for a night of lights, music and masti.</p>
+        <p>Your ticket code:</p>
+        <div class="ticket" id="guestCode"></div>
+        <p class="small">
+          Show this page to the entry staff. Entry is confirmed
+          only after the staff validates your ticket.
+        </p>
+      `;
+      document.getElementById("guestCode").textContent = guestTicket;
+    } else {
+      // STAFF PAGE: open the main website without ?ticket=...
+      app.innerHTML = `
+        <h1>🪔 Diwali Entry Gate</h1>
+        <p>Scan the ticket. Let the superstar in!</p>
+        <input id="staffPin" type="password"
+          placeholder="Staff passphrase (not configured yet)">
+        <button id="startBtn">Start Camera</button>
+        <button id="stopBtn" hidden>Stop Camera</button>
+        <div id="reader"></div>
+        <div id="result" role="status" aria-live="polite">
+          Staff scanner ready.
+        </div>
+        <p class="small">
+          First valid scan allows entry. Duplicate scans are rejected.
+        </p>
+      `;
+
+      let scanner = null;
+      let busy = false;
+      let callbackCounter = 0;
+      const resultBox = document.getElementById("result");
+
+      function showResult(message, type = "info") {
+        resultBox.className = type;
+        resultBox.textContent = message;
+      }
+
+      function extractTicketCode(text) {
+        try {
+          const url = new URL(text);
+          const code = url.searchParams.get("ticket");
+          if (code) return code.trim();
+        } catch (e) {
+          // Older QR codes may contain only the ticket code.
+        }
+        return text.trim();
+      }
+
+      document.getElementById("startBtn").onclick = async () => {
+        try {
+          if (!scanner) scanner = new Html5Qrcode("reader");
+
+          await scanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            async (text) => {
+              if (busy) return;
+              busy = true;
+              showResult("Checking ticket... 🎬");
+
+              try {
+                const code = extractTicketCode(text);
+                const data = await validateTicket(code);
+
+                if (data.status === "ALLOWED") {
+                  showResult("✅ " + data.message, "allowed");
+                } else {
+                  showResult("❌ " + data.message, "denied");
+                }
+              } catch (error) {
+                showResult(
+                  "Connection error. Check internet and try again.",
+                  "denied"
+                );
+              } finally {
+                setTimeout(() => { busy = false; }, 2500);
+              }
+            }
+          );
+
+          document.getElementById("startBtn").hidden = true;
+          document.getElementById("stopBtn").hidden = false;
+          showResult("Camera on! Scan a ticket QR. 📸");
+        } catch (error) {
+          showResult("Camera error: " + (error.message || error), "denied");
+        }
+      };
+
+      document.getElementById("stopBtn").onclick = async () => {
+        if (scanner && scanner.isScanning) await scanner.stop();
+        document.getElementById("startBtn").hidden = false;
+        document.getElementById("stopBtn").hidden = true;
+        showResult("Camera stopped.");
+      };
+
+      function validateTicket(code) {
+        return new Promise((resolve, reject) => {
+          const callbackName =
+            "diwaliCallback" + Date.now() + (++callbackCounter);
+          const script = document.createElement("script");
+          let finished = false;
+
+          function cleanup() {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeout);
+            script.remove();
+            delete window[callbackName];
+          }
+
+          const timeout = setTimeout(() => {
+            cleanup();
+            reject(new Error("Request timed out"));
+          }, 15000);
+
+          window[callbackName] = (data) => {
+            cleanup();
+            if (!data || !data.status) {
+              reject(new Error("Invalid server response"));
+              return;
+            }
+            resolve(data);
+          };
+
+          script.onerror = () => {
+            cleanup();
+            reject(new Error("Could not reach Apps Script"));
+          };
+
+          const query = new URLSearchParams({
+            action: "validate",
+            code: code,
+            callback: callbackName
+          });
+
+          script.src = API_URL + "?" + query.toString();
+          document.body.appendChild(script);
+        });
+      }
+    }
+  </script>
+</body>
+</html>
