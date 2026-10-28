@@ -16,7 +16,7 @@
 
     body {
       margin: 0;
-      padding: 20px;
+      padding: 16px;
       min-height: 100vh;
       display: flex;
       justify-content: center;
@@ -40,7 +40,8 @@
       color: #ffcf70;
     }
 
-    input, button {
+    input,
+    button {
       width: 100%;
       padding: 13px;
       margin: 8px 0;
@@ -50,6 +51,8 @@
 
     input {
       border: 1px solid #aaa;
+      background: white;
+      color: #20152b;
     }
 
     button {
@@ -77,6 +80,7 @@
       border-radius: 10px;
       background: #393047;
       overflow-wrap: anywhere;
+      line-height: 1.5;
     }
 
     .allowed {
@@ -133,10 +137,6 @@
     }
 
     @media (max-width: 400px) {
-      body {
-        padding: 12px;
-      }
-
       .card {
         padding: 18px;
       }
@@ -155,7 +155,7 @@
   </main>
 
   <script>
-    // EXISTING GOOGLE APPS SCRIPT BACKEND
+    // YOUR EXISTING GOOGLE APPS SCRIPT WEB APP URL
     const API_URL =
       "https://script.google.com/macros/s/AKfycbzir-1Vc65MMHkuzPUNskFg39dBMOLYstz7EtNfrcmuR4GZFP9P36RgVxnUpnfIIPJO/exec";
 
@@ -164,8 +164,9 @@
     const guestTicket = params.get("ticket");
 
     // ==================================================
-    // GUEST PAGE: SHOW THE GUEST'S QR CODE
+    // GUEST PAGE: DISPLAY TICKET AND QR CODE
     // ==================================================
+
     if (guestTicket) {
       app.innerHTML = `
         <h1>🎉 You're Invited! 🪔</h1>
@@ -194,21 +195,20 @@
         <div class="guest-instructions">
           <p>📱 Show this QR code to the entry staff.</p>
           <p class="small">
-            Your entry will be confirmed when staff
-            scans and validates your ticket.
+            Entry is confirmed after staff scans
+            and validates your ticket.
           </p>
         </div>
 
         <p class="small">
-          Keep this ticket private. It is valid for
-          one entry only.
+          Keep this ticket private. It is valid
+          for one entry only.
         </p>
       `;
 
       document.getElementById("guestCode").textContent =
         guestTicket;
 
-      // Use the current guest ticket URL as the QR content.
       const guestLink = window.location.href;
       const qrContainer = document.getElementById("guestQr");
       const qrImage = document.createElement("img");
@@ -225,13 +225,11 @@
         qrContainer.innerHTML = `
           <p style="color:#20152b">
             QR code could not load.
-            Please check your internet connection
-            and refresh this page.
+            Check your internet connection and refresh.
           </p>
         `;
       };
 
-      // External QR image service.
       qrImage.src =
         "https://api.qrserver.com/v1/create-qr-code/" +
         "?size=260x260&data=" +
@@ -240,15 +238,24 @@
     } else {
 
       // ==================================================
-      // STAFF PAGE: SCAN AND VALIDATE TICKETS
+      // STAFF PAGE: PASSWORD-PROTECTED SCANNER
       // ==================================================
+
       app.innerHTML = `
         <h1>🪔 Diwali Entry Gate</h1>
 
-        <p>Scan the ticket. Let the superstar in!</p>
+        <p>Staff access only</p>
+
+        <input
+          id="staffPassword"
+          type="password"
+          placeholder="Enter password"
+          autocomplete="current-password"
+          aria-label="Enter staff password"
+        >
 
         <button id="startBtn">
-          Start Camera
+          Verify Password & Start Camera
         </button>
 
         <button id="stopBtn" class="hidden">
@@ -258,149 +265,37 @@
         <div id="reader"></div>
 
         <div id="result" role="status" aria-live="polite">
-          Staff scanner ready.
+          Enter the staff password to start the scanner.
         </div>
 
         <p class="small">
-          First valid scan allows entry.
-          Duplicate scans are rejected.
+          Valid tickets are accepted once.
+          Previously used tickets are rejected.
         </p>
       `;
 
       let scanner = null;
       let busy = false;
       let callbackCounter = 0;
+      let staffAuthenticated = false;
 
       const resultBox = document.getElementById("result");
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
+      const passwordInput = document.getElementById("staffPassword");
 
       function showResult(message, type = "info") {
         resultBox.className = type;
         resultBox.textContent = message;
       }
 
-      // Supports new QR codes containing a guest URL
-      // and older QR codes containing only the ticket code.
-      function extractTicketCode(text) {
-        try {
-          const url = new URL(text);
-          const code = url.searchParams.get("ticket");
-
-          if (code) {
-            return code.trim();
-          }
-        } catch (e) {
-          // The QR may contain a plain ticket code.
-        }
-
-        return text.trim();
-      }
-
-      startBtn.onclick = async () => {
-        startBtn.disabled = true;
-
-        try {
-          if (!scanner) {
-            scanner = new Html5Qrcode("reader");
-          }
-
-          await scanner.start(
-            { facingMode: "environment" },
-            {
-              fps: 10,
-              qrbox: {
-                width: 250,
-                height: 250
-              }
-            },
-
-            async (text) => {
-              if (busy) return;
-
-              busy = true;
-              showResult("Checking ticket... 🎬", "info");
-
-              try {
-                const code = extractTicketCode(text);
-                const data = await validateTicket(code);
-
-                if (data.status === "ALLOWED") {
-                  showResult(
-                    "✅ " + data.message,
-                    "allowed"
-                  );
-                } else if (data.status === "ALREADY_USED") {
-                  showResult(
-                    "⛔ " + data.message,
-                    "denied"
-                  );
-                } else {
-                  showResult(
-                    "❌ " + data.message,
-                    "denied"
-                  );
-                }
-
-              } catch (error) {
-                showResult(
-                  "Connection error. Check the internet " +
-                  "connection and try again.",
-                  "denied"
-                );
-
-              } finally {
-                setTimeout(() => {
-                  busy = false;
-                }, 2500);
-              }
-            }
-          );
-
-          startBtn.classList.add("hidden");
-          stopBtn.classList.remove("hidden");
-
-          showResult(
-            "Camera on! Scan a ticket QR. 📸",
-            "info"
-          );
-
-        } catch (error) {
-          showResult(
-            "Camera error: " +
-            (error.message || error),
-            "denied"
-          );
-
-        } finally {
-          startBtn.disabled = false;
-        }
-      };
-
-      stopBtn.onclick = async () => {
-        try {
-          if (scanner && scanner.isScanning) {
-            await scanner.stop();
-          }
-
-          startBtn.classList.remove("hidden");
-          stopBtn.classList.add("hidden");
-
-          showResult("Camera stopped.", "info");
-
-        } catch (error) {
-          showResult(
-            "Could not stop camera: " +
-            (error.message || error),
-            "denied"
-          );
-        }
-      };
-
       // ==================================================
-      // VALIDATE TICKET WITH GOOGLE APPS SCRIPT
+      // BACKEND REQUEST USING JSONP
       // ==================================================
-      function validateTicket(code) {
+
+      function staffRequest(action, code = "") {
+        const password = passwordInput.value;
+
         return new Promise((resolve, reject) => {
           const callbackName =
             "diwaliCallback" +
@@ -438,20 +333,244 @@
 
           script.onerror = () => {
             cleanup();
-            reject(new Error("Could not reach Apps Script"));
+            reject(new Error("Could not reach the server"));
           };
 
           const query = new URLSearchParams({
-            action: "validate",
-            code: code,
+            action: action,
+            password: password,
             callback: callbackName
           });
 
-          script.src = API_URL + "?" + query.toString();
+          if (code) {
+            query.set("code", code);
+          }
 
+          script.src = API_URL + "?" + query.toString();
           document.body.appendChild(script);
         });
       }
+
+      // ==================================================
+      // EXTRACT CODE FROM SCANNED QR
+      // ==================================================
+
+      function extractTicketCode(text) {
+        try {
+          const url = new URL(text);
+          const code = url.searchParams.get("ticket");
+
+          if (code) {
+            return code.trim();
+          }
+        } catch (error) {
+          // Older QR codes may contain just the ticket code.
+        }
+
+        return text.trim();
+      }
+
+      // ==================================================
+      // VERIFY PASSWORD, THEN START CAMERA
+      // ==================================================
+
+      startBtn.onclick = async () => {
+        if (staffAuthenticated) {
+          await startCamera();
+          return;
+        }
+
+        if (!passwordInput.value) {
+          showResult(
+            "Please enter the staff password first.",
+            "denied"
+          );
+          passwordInput.focus();
+          return;
+        }
+
+        startBtn.disabled = true;
+        showResult("Verifying password...", "info");
+
+        try {
+          const auth = await staffRequest("auth");
+
+          if (!auth || auth.status !== "AUTH_OK") {
+            staffAuthenticated = false;
+            passwordInput.value = "";
+
+            showResult(
+              "Incorrect password. Please try again.",
+              "denied"
+            );
+
+            passwordInput.focus();
+            return;
+          }
+
+          staffAuthenticated = true;
+          showResult(
+            "Password accepted. Starting camera...",
+            "allowed"
+          );
+
+          await startCamera();
+
+        } catch (error) {
+          showResult(
+            "Could not verify password. Check internet " +
+            "connection and backend deployment.",
+            "denied"
+          );
+
+        } finally {
+          startBtn.disabled = false;
+        }
+      };
+
+      // Allow Enter key to submit the password.
+      passwordInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          startBtn.click();
+        }
+      });
+
+      // ==================================================
+      // START CAMERA
+      // ==================================================
+
+      async function startCamera() {
+        try {
+          if (!staffAuthenticated) {
+            showResult(
+              "Enter the correct password first.",
+              "denied"
+            );
+            return;
+          }
+
+          if (scanner && scanner.isScanning) {
+            return;
+          }
+
+          if (!scanner) {
+            scanner = new Html5Qrcode("reader");
+          }
+
+          await scanner.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: {
+                width: 250,
+                height: 250
+              }
+            },
+
+            async (text) => {
+              if (busy || !staffAuthenticated) {
+                return;
+              }
+
+              busy = true;
+              showResult("Checking ticket...", "info");
+
+              try {
+                const code = extractTicketCode(text);
+                const data = await staffRequest("validate", code);
+
+                if (data.status === "ALLOWED") {
+                  showResult(
+                    "✅ " + data.message,
+                    "allowed"
+                  );
+
+                } else if (data.status === "ALREADY_USED") {
+                  showResult(
+                    "⛔ " + data.message,
+                    "denied"
+                  );
+
+                } else if (data.status === "UNAUTHORIZED") {
+                  staffAuthenticated = false;
+                  passwordInput.value = "";
+
+                  showResult(
+                    "Staff authentication failed. " +
+                    "Enter the password again.",
+                    "denied"
+                  );
+
+                } else {
+                  showResult(
+                    "❌ " + data.message,
+                    "denied"
+                  );
+                }
+
+              } catch (error) {
+                showResult(
+                  "Connection error. Check the internet " +
+                  "connection and try again.",
+                  "denied"
+                );
+
+              } finally {
+                setTimeout(() => {
+                  busy = false;
+                }, 2500);
+              }
+            }
+          );
+
+          startBtn.classList.add("hidden");
+          stopBtn.classList.remove("hidden");
+
+          showResult(
+            "Camera on! Scan a ticket QR. 📸",
+            "info"
+          );
+
+        } catch (error) {
+          showResult(
+            "Camera error: " + (error.message || error),
+            "denied"
+          );
+        }
+      }
+
+      // ==================================================
+      // STOP CAMERA
+      // ==================================================
+
+      stopBtn.onclick = async () => {
+        try {
+          if (scanner && scanner.isScanning) {
+            await scanner.stop();
+          }
+
+          staffAuthenticated = false;
+          passwordInput.value = "";
+
+          startBtn.textContent =
+            "Verify Password & Start Camera";
+
+          startBtn.classList.remove("hidden");
+          stopBtn.classList.add("hidden");
+
+          showResult(
+            "Camera stopped. Enter password to start again.",
+            "info"
+          );
+
+        } catch (error) {
+          showResult(
+            "Could not stop camera: " +
+            (error.message || error),
+            "denied"
+          );
+        }
+      };
     }
   </script>
 </body>
