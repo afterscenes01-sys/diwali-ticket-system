@@ -4,10 +4,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171321">
   <title>Diwali Ticket System</title>
+
   <script src="https://unpkg.com/html5-qrcode"></script>
+
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       padding: 20px;
@@ -20,6 +26,7 @@
       font-family: Arial, sans-serif;
       text-align: center;
     }
+
     .card {
       width: 100%;
       max-width: 480px;
@@ -28,7 +35,11 @@
       background: #282238;
       box-shadow: 0 10px 35px #0005;
     }
-    h1 { color: #ffcf70; }
+
+    h1 {
+      color: #ffcf70;
+    }
+
     input, button {
       width: 100%;
       padding: 13px;
@@ -36,7 +47,11 @@
       border-radius: 9px;
       font-size: 16px;
     }
-    input { border: 1px solid #aaa; }
+
+    input {
+      border: 1px solid #aaa;
+    }
+
     button {
       border: 0;
       background: #ffcf70;
@@ -44,7 +59,18 @@
       font-weight: bold;
       cursor: pointer;
     }
-    #reader { margin-top: 16px; }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #reader {
+      margin-top: 16px;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+
     #result {
       margin-top: 16px;
       padding: 14px;
@@ -52,13 +78,76 @@
       background: #393047;
       overflow-wrap: anywhere;
     }
-    .allowed { color: #8cffae; }
-    .denied { color: #ff9292; }
-    .info { color: #ffdc8e; }
-    .small { color: #c9c2d5; font-size: 13px; }
-    .ticket { font-size: 21px; font-weight: bold; overflow-wrap: anywhere; }
+
+    .allowed {
+      color: #8cffae;
+    }
+
+    .denied {
+      color: #ff9292;
+    }
+
+    .info {
+      color: #ffdc8e;
+    }
+
+    .small {
+      color: #c9c2d5;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .ticket {
+      font-size: 21px;
+      font-weight: bold;
+      overflow-wrap: anywhere;
+      color: #ffcf70;
+      margin: 12px 0;
+    }
+
+    .qr-container {
+      display: inline-block;
+      max-width: 100%;
+      padding: 12px;
+      margin: 12px auto;
+      border-radius: 12px;
+      background: white;
+    }
+
+    .qr-container img {
+      display: block;
+      width: 260px;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .guest-instructions {
+      padding: 12px;
+      margin-top: 16px;
+      background: #393047;
+      border-radius: 10px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 400px) {
+      body {
+        padding: 12px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .qr-container img {
+        width: 230px;
+      }
+    }
   </style>
 </head>
+
 <body>
   <main class="card" id="app">
     <h1>🪔 Diwali Party</h1>
@@ -66,6 +155,7 @@
   </main>
 
   <script>
+    // EXISTING GOOGLE APPS SCRIPT BACKEND
     const API_URL =
       "https://script.google.com/macros/s/AKfycbzir-1Vc65MMHkuzPUNskFg39dBMOLYstz7EtNfrcmuR4GZFP9P36RgVxnUpnfIIPJO/exec";
 
@@ -73,132 +163,276 @@
     const params = new URLSearchParams(window.location.search);
     const guestTicket = params.get("ticket");
 
-    // GUEST PAGE: open when a guest scans their ticket QR.
+    // ==================================================
+    // GUEST PAGE: SHOW THE GUEST'S QR CODE
+    // ==================================================
     if (guestTicket) {
       app.innerHTML = `
         <h1>🎉 You're Invited! 🪔</h1>
+
         <p>Welcome, Superstar!</p>
-        <p>Get ready for a night of lights, music and masti.</p>
+
+        <p>
+          Get ready for a night of lights,
+          music and masti.
+        </p>
+
+        <h3 style="color:#ffcf70">
+          Your Entry QR Code
+        </h3>
+
+        <div class="qr-container" id="guestQr">
+          <p style="color:#20152b">
+            Generating your QR code...
+          </p>
+        </div>
+
         <p>Your ticket code:</p>
+
         <div class="ticket" id="guestCode"></div>
+
+        <div class="guest-instructions">
+          <p>📱 Show this QR code to the entry staff.</p>
+          <p class="small">
+            Your entry will be confirmed when staff
+            scans and validates your ticket.
+          </p>
+        </div>
+
         <p class="small">
-          Show this page to the entry staff. Entry is confirmed
-          only after the staff validates your ticket.
+          Keep this ticket private. It is valid for
+          one entry only.
         </p>
       `;
-      document.getElementById("guestCode").textContent = guestTicket;
+
+      document.getElementById("guestCode").textContent =
+        guestTicket;
+
+      // Use the current guest ticket URL as the QR content.
+      const guestLink = window.location.href;
+      const qrContainer = document.getElementById("guestQr");
+      const qrImage = document.createElement("img");
+
+      qrImage.alt = "Diwali party entry QR code";
+      qrImage.width = 260;
+      qrImage.height = 260;
+
+      qrImage.onload = () => {
+        qrContainer.replaceChildren(qrImage);
+      };
+
+      qrImage.onerror = () => {
+        qrContainer.innerHTML = `
+          <p style="color:#20152b">
+            QR code could not load.
+            Please check your internet connection
+            and refresh this page.
+          </p>
+        `;
+      };
+
+      // External QR image service.
+      qrImage.src =
+        "https://api.qrserver.com/v1/create-qr-code/" +
+        "?size=260x260&data=" +
+        encodeURIComponent(guestLink);
+
     } else {
-      // STAFF PAGE: open the main website without ?ticket=...
+
+      // ==================================================
+      // STAFF PAGE: SCAN AND VALIDATE TICKETS
+      // ==================================================
       app.innerHTML = `
         <h1>🪔 Diwali Entry Gate</h1>
+
         <p>Scan the ticket. Let the superstar in!</p>
-        <input id="staffPin" type="password"
-          placeholder="Staff passphrase (not configured yet)">
-        <button id="startBtn">Start Camera</button>
-        <button id="stopBtn" hidden>Stop Camera</button>
+
+        <button id="startBtn">
+          Start Camera
+        </button>
+
+        <button id="stopBtn" class="hidden">
+          Stop Camera
+        </button>
+
         <div id="reader"></div>
+
         <div id="result" role="status" aria-live="polite">
           Staff scanner ready.
         </div>
+
         <p class="small">
-          First valid scan allows entry. Duplicate scans are rejected.
+          First valid scan allows entry.
+          Duplicate scans are rejected.
         </p>
       `;
 
       let scanner = null;
       let busy = false;
       let callbackCounter = 0;
+
       const resultBox = document.getElementById("result");
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
 
       function showResult(message, type = "info") {
         resultBox.className = type;
         resultBox.textContent = message;
       }
 
+      // Supports new QR codes containing a guest URL
+      // and older QR codes containing only the ticket code.
       function extractTicketCode(text) {
         try {
           const url = new URL(text);
           const code = url.searchParams.get("ticket");
-          if (code) return code.trim();
+
+          if (code) {
+            return code.trim();
+          }
         } catch (e) {
-          // Older QR codes may contain only the ticket code.
+          // The QR may contain a plain ticket code.
         }
+
         return text.trim();
       }
 
-      document.getElementById("startBtn").onclick = async () => {
+      startBtn.onclick = async () => {
+        startBtn.disabled = true;
+
         try {
-          if (!scanner) scanner = new Html5Qrcode("reader");
+          if (!scanner) {
+            scanner = new Html5Qrcode("reader");
+          }
 
           await scanner.start(
             { facingMode: "environment" },
-            { fps: 10, qrbox: { width: 250, height: 250 } },
+            {
+              fps: 10,
+              qrbox: {
+                width: 250,
+                height: 250
+              }
+            },
+
             async (text) => {
               if (busy) return;
+
               busy = true;
-              showResult("Checking ticket... 🎬");
+              showResult("Checking ticket... 🎬", "info");
 
               try {
                 const code = extractTicketCode(text);
                 const data = await validateTicket(code);
 
                 if (data.status === "ALLOWED") {
-                  showResult("✅ " + data.message, "allowed");
+                  showResult(
+                    "✅ " + data.message,
+                    "allowed"
+                  );
+                } else if (data.status === "ALREADY_USED") {
+                  showResult(
+                    "⛔ " + data.message,
+                    "denied"
+                  );
                 } else {
-                  showResult("❌ " + data.message, "denied");
+                  showResult(
+                    "❌ " + data.message,
+                    "denied"
+                  );
                 }
+
               } catch (error) {
                 showResult(
-                  "Connection error. Check internet and try again.",
+                  "Connection error. Check the internet " +
+                  "connection and try again.",
                   "denied"
                 );
+
               } finally {
-                setTimeout(() => { busy = false; }, 2500);
+                setTimeout(() => {
+                  busy = false;
+                }, 2500);
               }
             }
           );
 
-          document.getElementById("startBtn").hidden = true;
-          document.getElementById("stopBtn").hidden = false;
-          showResult("Camera on! Scan a ticket QR. 📸");
+          startBtn.classList.add("hidden");
+          stopBtn.classList.remove("hidden");
+
+          showResult(
+            "Camera on! Scan a ticket QR. 📸",
+            "info"
+          );
+
         } catch (error) {
-          showResult("Camera error: " + (error.message || error), "denied");
+          showResult(
+            "Camera error: " +
+            (error.message || error),
+            "denied"
+          );
+
+        } finally {
+          startBtn.disabled = false;
         }
       };
 
-      document.getElementById("stopBtn").onclick = async () => {
-        if (scanner && scanner.isScanning) await scanner.stop();
-        document.getElementById("startBtn").hidden = false;
-        document.getElementById("stopBtn").hidden = true;
-        showResult("Camera stopped.");
+      stopBtn.onclick = async () => {
+        try {
+          if (scanner && scanner.isScanning) {
+            await scanner.stop();
+          }
+
+          startBtn.classList.remove("hidden");
+          stopBtn.classList.add("hidden");
+
+          showResult("Camera stopped.", "info");
+
+        } catch (error) {
+          showResult(
+            "Could not stop camera: " +
+            (error.message || error),
+            "denied"
+          );
+        }
       };
 
+      // ==================================================
+      // VALIDATE TICKET WITH GOOGLE APPS SCRIPT
+      // ==================================================
       function validateTicket(code) {
         return new Promise((resolve, reject) => {
           const callbackName =
-            "diwaliCallback" + Date.now() + (++callbackCounter);
+            "diwaliCallback" +
+            Date.now() +
+            (++callbackCounter);
+
           const script = document.createElement("script");
           let finished = false;
+          let timeout;
 
           function cleanup() {
             if (finished) return;
+
             finished = true;
             clearTimeout(timeout);
             script.remove();
             delete window[callbackName];
           }
 
-          const timeout = setTimeout(() => {
+          timeout = setTimeout(() => {
             cleanup();
             reject(new Error("Request timed out"));
           }, 15000);
 
           window[callbackName] = (data) => {
             cleanup();
+
             if (!data || !data.status) {
               reject(new Error("Invalid server response"));
               return;
             }
+
             resolve(data);
           };
 
@@ -214,6 +448,7 @@
           });
 
           script.src = API_URL + "?" + query.toString();
+
           document.body.appendChild(script);
         });
       }
